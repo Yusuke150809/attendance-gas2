@@ -1,0 +1,316 @@
+<style>
+  body {
+    color:#333;                 
+    background:#f8f9fb;    /* カラー選択ツールから */   
+    font-family:'Segoe UI','Helvetica Neue',sans-serif;
+  }
+
+  table {
+    background:#fff;
+    box-shadow:0 2px 8px rgba(0,0,0,.05);
+    border:1px solid #e5e7eb;
+    width:100%;
+  } /* 表の見た目を改善 */
+
+  th, td {
+    padding:8px 12px;
+    border-bottom:1px solid #e5e7eb;
+    text-align: center; /* 全セルを中央揃え */
+  }
+  thead th {
+    background:#2d87ff;  
+    color:#fff;           
+  }
+  tbody tr:nth-child(even) {
+    background:#f4f8ff;   
+  }
+
+  /* キャンセルボタン */
+  .btn-cancel {
+    display:inline-block;
+    text-align:center;
+    background:#ccc;
+    color:#333;
+    border:none;
+    border-radius:6px;
+    padding:8px 14px;
+    font-size:14px;
+    cursor:pointer;
+    text-decoration:none; /* 下線消す */
+  }
+  .btn-cancel:hover {
+    background:#bbb;
+  }
+
+  /* ★リンク色を整える */
+  a {
+    color:#2d87ff;
+    text-decoration:none;
+  }
+  a:hover { text-decoration:underline; }
+
+  /* 必須項目のラベルスタイル */
+  .required-label {
+    color: #e74c3c;
+    font-weight: bold;
+  }
+  
+  /* 必須項目の入力フィールドスタイル */
+  .required-field {
+    border: 2px solid #e74c3c;
+  }
+  
+  /* ボタン無効化時のスタイル */
+  button:disabled {
+    background-color: #ccc !important;
+    cursor: not-allowed !important;
+    opacity: 0.6;
+  }
+
+  /* ★入力系のトーンを統一 */
+  input[type="text"], select, input[type="date"], input[type="time"] {
+    border:1px solid #cbd5e1;
+    border-radius:6px;
+    padding:6px 8px;
+    background:#fff;
+  }
+
+  /* ★ボタンを青基調に（.btn も上書き） */
+  .btn, button, input[type="submit"] {
+    background:#2d87ff;
+    color:#fff;
+    border:none;
+    border-radius:8px;
+    padding:10px 16px;
+    width:auto;           
+    min-width:140px;
+    cursor:pointer;
+    box-shadow:0 2px 6px rgba(45,135,255,.25);
+    transition:background .15s ease, transform .05s ease;
+  }
+  .btn:hover, button:hover, input[type="submit"]:hover {
+    background:#1c5fc9;
+    transform:translateY(-1px);
+  }
+
+  /* 会社タイトル（ロゴ風） */
+  .company-title {
+    font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
+    font-size: 48px;
+    font-weight: 900;
+    color: #333;
+    margin: 8px 0 24px;
+    text-align: center;
+    letter-spacing: 0.05em;
+  }
+
+  /* 従業員カード一覧 */
+  .emp-list h3 {
+    margin: 12px 0 8px;
+  }
+  .emp-card-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .emp-card {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    min-width: 220px;
+    border: 2px solid #2d87ff;
+    border-radius: 12px;
+    background: #fff;
+    text-decoration: none;   /* リンクの下線消す */
+    color: #111;            /* テキスト色 */
+    font-weight: 700;
+    transition: transform .05s ease, box-shadow .15s ease;
+  }
+  .emp-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(0,0,0,.08);
+  }
+  .emp-id {
+    background: #2d87ff;
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-weight: 800;
+    font-size: 13px;
+    min-width: 40px;
+    text-align: center;
+  }
+
+  /* 勤務状況カード */
+  .attendance-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 16px;
+    margin: 20px 0;
+  }
+  
+  .attendance-card {
+    position: relative;
+    background: #fff;
+    border: 2px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.05);
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  
+  .attendance-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0,0,0,.1);
+  }
+  
+  .status-badge {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    padding: 6px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+    min-width: 80px;
+  }
+  
+  .status-working {
+    background: #dcfce7;
+    color: #166534;
+    border: 1px solid #bbf7d0;
+  }
+  
+  .status-break {
+    background: #f3f4f6;
+    color: #374151;
+    border: 1px solid #d1d5db;
+  }
+  
+  .status-off_duty {
+    background: #fef2f2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+  }
+  
+  .employee-info {
+    margin-right: 100px; /* 右のバッジスペース確保 */
+  }
+  
+  .employee-name {
+    font-size: 18px;
+    font-weight: 700;
+    color: #111;
+    margin-bottom: 4px;
+  }
+  
+  .employee-id {
+    font-size: 14px;
+    color: #6b7280;
+    margin-bottom: 8px;
+  }
+  
+  .last-action {
+    font-size: 12px;
+    color: #9ca3af;
+  }
+
+  .emp-name {
+    white-space: nowrap;
+  }
+
+  .col-student {
+    width: 5.5ch;        
+    max-width: 5.5ch;
+    white-space: nowrap;
+    text-align: center; /* 中央揃えに変更 */
+  } 
+  input[name="student"] {
+    width: 5.5ch;
+  }
+
+  /* フィルターバー */
+  .filter-bar { 
+    margin:12px 0; 
+    display:flex; 
+    gap:8px; 
+    flex-wrap:wrap; 
+  }
+  .filter-bar input, .filter-bar select {
+    padding:4px 6px; 
+    border:1px solid #ccc; 
+    border-radius:4px;
+  }
+
+  /* モバイル対応 */
+  @media (max-width: 768px) {
+    body {
+      font-size: 14px;
+      line-height: 1.4;
+      padding: 10px;
+    }
+    
+    table {
+      margin: 0 8px; /* 左右に余白を追加 */
+      font-size: 12px;
+    }
+    
+    th, td {
+      padding: 6px 4px;
+      font-size: 12px;
+    }
+    
+    .btn,
+    input,
+    select,
+    textarea {
+      font-size: 14px;
+      padding: 8px;
+    }
+    
+    .filter-bar {
+      flex-direction: column;
+      gap: 4px;
+    }
+    
+    .filter-bar input {
+      width: 100%;
+      box-sizing: border-box;
+    }
+    
+    .col-student {
+      min-width: 60px;
+    }
+    
+    .col-workingtime {
+      min-width: 80px;
+    }
+    
+    .col-feedback {
+      min-width: 100px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    table {
+      margin: 0 4px; /* さらに狭い画面では余白を小さく */
+      font-size: 11px;
+    }
+    
+    th, td {
+      padding: 4px 2px;
+      font-size: 11px;
+    }
+    
+    .btn {
+      padding: 6px 12px;
+      font-size: 12px;
+      min-width: 80px;
+    }
+  }
+
+
+
+</style>

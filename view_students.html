@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <?!= HtmlService.createHtmlOutputFromFile('css').getContent(); ?>
+    <script>
+      // 入力値でカードを絞り込み
+      function filterStudents(q){
+        var query = (q || '').trim();
+        var items = document.querySelectorAll('.stu-card');
+        if (!query){
+          items.forEach(el => el.style.display = '');
+          return;
+        }
+        items.forEach(el => {
+          var name = el.getAttribute('data-name') || '';
+          el.style.display = name.indexOf(query) >= 0 ? '' : 'none';
+        });
+      }
+    </script>
+  </head>
+  <body>
+    <div class="company-title">開発塾</div>
+
+    <div class="emp-list">
+      <h3>生徒一覧</h3>
+
+      <!-- 検索（任意） -->
+      <div style="margin:8px 0 12px;">
+        <input type="text" placeholder="生徒名で絞り込み"
+               oninput="filterStudents(this.value)" />
+      </div>
+
+      <div class="emp-card-wrap">
+        <?
+          var students = getStudents(); // gsのところで作成
+          var appUrl   = getAppUrl();
+          for (var i = 0; i < students.length; i++) {
+            var name = students[i];
+            var url  = appUrl + '?student=' + encodeURIComponent(name);
+        ?>
+          <a class="emp-card stu-card" data-name="<?= name ?>" href="<?= url ?>">
+            <span class="emp-id">STU</span>
+            <span class="emp-name"><?= name ?></span>
+          </a>
+        <? } ?>
+
+        <? if (students.length === 0) { ?>
+          <div>生徒データがまだありません。</div>
+        <? } ?>
+      </div>
+
+      <div class="btn-frame" style="margin-top:16px;">
+        <a href="<?= getAppUrl() ?>">ホーム画面に戻る</a>
+      </div>
+    </div>
+  </body>
+</html>

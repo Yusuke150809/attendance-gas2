@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <?!= HtmlService.createHtmlOutputFromFile('css').getContent(); ?>
+    <style>
+      /* Home画面専用のセンタリングスタイル */
+      .home-container {
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+        text-align: center;
+      }
+      
+      .home-section {
+        margin-bottom: 32px;
+      }
+      
+      .home-section h3 {
+        margin-bottom: 16px;
+        font-size: 24px;
+        color: #333;
+      }
+      
+      .home-button {
+        display: inline-block;
+        width: 100%;
+        max-width: 320px;
+        padding: 20px 24px;
+        margin: 8px;
+        text-decoration: none;
+        background: #fff;
+        border: 3px solid #2d87ff;
+        border-radius: 16px;
+        box-shadow: 0 4px 12px rgba(45, 135, 255, 0.15);
+        transition: all 0.2s ease;
+        color: #111;
+        font-weight: 700;
+        font-size: 18px;
+      }
+      
+      .home-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(45, 135, 255, 0.25);
+        background: #f8f9fb;
+      }
+      
+      .home-button-icon {
+        display: inline-block;
+        background: #2d87ff;
+        color: #fff;
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-weight: 800;
+        font-size: 16px;
+        margin-right: 12px;
+        min-width: 60px;
+        text-align: center;
+      }
+      
+      .company-title {
+        margin-bottom: 40px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="home-container">
+      <!-- 生徒用ページ -->
+      <div class="home-section">
+        <a class="home-button" href="<?= getAppUrl() ?>?page=students">
+          <span class="home-button-icon">STU</span>
+          <span>生徒ページへ</span>
+        </a>
+      </div>
+
+      <!-- 従業員用ページ -->
+      <div class="home-section">
+        <a class="home-button" href="<?= getAppUrl() ?>?page=employees">
+          <span class="home-button-icon">EMP</span>
+          <span>従業員ページへ</span>
+        </a>
+      </div>
+
+      <!-- 塾長ページ -->
+      <div class="home-section">
+        <a class="home-button" href="<?= getAppUrl() ?>?page=admin&from=home">
+          <span class="home-button-icon">ADM</span>
+          <span>塾長ページへ</span>
+        </a>
+      </div>
+    </div>
+  </body>
+</html>

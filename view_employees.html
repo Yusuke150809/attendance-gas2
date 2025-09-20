@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <?!= HtmlService.createHtmlOutputFromFile('css').getContent(); ?>
+  </head>
+  <body>
+    <h3>従業員一覧</h3>
+    <div class="emp-list">
+      <div class="emp-card-wrap">
+        <? var record = getEmployees();
+           for (var i = 0; i < record.length; i++) {
+             var id   = record[i]["id"];
+             var name = record[i]["name"];
+             var url  = getAppUrl() + "?page=qr&empId=" + encodeURIComponent(id);
+        ?>
+          <a class="emp-card" href="<?= url ?>">
+            <span class="emp-id"><?= id ?></span>
+            <span class="emp-name"><?= name ?></span>
+          </a>
+        <? } ?>
+      </div>
+    </div>
+
+    <div style="margin-top:20px;">
+      <a href="<?= getAppUrl() ?>">ホーム画面に戻る</a>
+    </div>
+  </body>
+</html>

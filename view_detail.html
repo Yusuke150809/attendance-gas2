@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <?!= HtmlService.createHtmlOutputFromFile('css').getContent(); ?>
+    <script>
+      // ページ遷移を抑止
+      function preventFormSubmit() {
+        var forms = document.querySelectorAll('form');
+        for (var i = 0; i < forms.length; i++) {
+          forms[i].addEventListener('submit', function(event) {
+            event.preventDefault();
+          });
+        }
+      }
+      window.addEventListener('load', preventFormSubmit);
+      
+      // ページ読み込み時にボタン状態を更新
+      window.addEventListener('load', function() {
+        updateButtonStates();
+        
+        // 必須項目の変更時にボタン状態を更新
+        var form = document.getElementById('workRecordForm');
+        if (form) {
+          var fields = ['target_date', 'target_time', 'target_type', 'subject', 'student'];
+          fields.forEach(function(fieldName) {
+            var field = form[fieldName];
+            if (field) {
+              field.addEventListener('change', checkMandatoryFieldsDetail);
+              field.addEventListener('input', checkMandatoryFieldsDetail);
+            }
+          });
+          
+          // 初期状態でボタンを無効化
+          checkMandatoryFieldsDetail();
+        }
+      });
+
+      // 勤怠登録（連打防止付き）
+      var isSubmitting = false;
+      function handleWorkRecordFormSubmit(formObject) {
+        if (isSubmitting) {
+          updateWRMessage('処理中です。しばらくお待ちください。');
+          return;
+        }
+        
+        // 必須項目の検証
+        if (!formObject.target_date) {
+          updateWRMessage('対象日付を入力してください');
+          return;
+        }
+        if (!formObject.target_time) {
+          updateWRMessage('対象時刻を入力してください');
+          return;
+        }
+        if (!formObject.target_type) {
+          updateWRMessage('打刻種別を選択してください');
+          return;
+        }
+        if (!formObject.subject) {
+          updateWRMessage('科目を選択してください');
+          return;
+        }
+        if (!formObject.student) {
+          updateWRMessage('生徒名を入力してください');
+          return;
+        }
+        
+        isSubmitting = true;
+        updateWRMessage('更新中…');
+        google.script.run
+          .withSuccessHandler(function(msg){
+            updateWRMessage(msg || '登録しました');
+            refreshTimeClocks();
+            updateButtonStates();
+            checkMandatoryFieldsDetail();
+            isSubmitting = false;
+          })
+          .withFailureHandler(function(err){
+            updateWRMessage('エラー: ' + (err && err.message ? err.message : err));
+            isSubmitting = false;
+          })
+          .saveWorkRecord(formObject);
+      }
+      function updateWRMessage(message) {
+        document.getElementById('wr_submit_message').innerHTML = message;
+      }
+
+      // 必須項目チェック関数
+      function checkMandatoryFieldsDetail() {
+        var form = document.getElementById('workRecordForm');
+        var targetDate = form.target_date.value;
+        var targetTime = form.target_time.value;
+        var targetType = form.target_type.value;
+        var subject = form.subject.value;
+        var student = form.student.value;
+        
+        var isValid = targetDate && targetTime && targetType && subject && student;
+        
+        var registerBtn = document.getElementById('registerBtn');
+        if (registerBtn) {
+          registerBtn.disabled = !isValid;
+        }
+        
+        var hiddenButtons = [
+          document.getElementById('clockInBtn'),
+          document.getElementById('breakBeginBtn'),
+          document.getElementById('breakEndBtn'),
+          document.getElementById('clockOutBtn')
+        ];
+        
+        hiddenButtons.forEach(function(btn) {
+          if (btn) {
+            btn.disabled = !isValid;
+          }
+        });
+        
+        return isValid;
+      }
+
+      // ボタン状態制御
+      function updateButtonStates() {
+        var empId = "<?= getSelectedEmpId() ?>";
+        if (!empId) return;
+        
+        google.script.run
+          .withSuccessHandler(function(status) {
+            var clockInBtn = document.getElementById('clockInBtn');
+            var breakBeginBtn = document.getElementById('breakBeginBtn');
+            var breakEndBtn = document.getElementById('breakEndBtn');
+            var clockOutBtn = document.getElementById('clockOutBtn');
+            var typeSelect = document.querySelector('select[name="target_type"]');
+            
+            if (clockInBtn) clockInBtn.style.display = 'none';
+            if (breakBeginBtn) breakBeginBtn.style.display = 'none';
+            if (breakEndBtn) breakEndBtn.style.display = 'none';
+            if (clockOutBtn) clockOutBtn.style.display = 'none';
+            
+            if (typeSelect) {
+              Array.from(typeSelect.options).forEach(function(option) {
+                option.style.display = 'none';
+              });
+            }
+            
+            switch (status.status) {
+              case 'working':
+                if (clockOutBtn) clockOutBtn.style.display = 'inline-block';
+                if (typeSelect) {
+                  typeSelect.querySelector('option[value="clock_out"]').style.display = 'block';
+                  typeSelect.value = 'clock_out';
+                }
+                break;
+              case 'break':
+                if (breakEndBtn) breakEndBtn.style.display = 'inline-block';
+                if (typeSelect) {
+                  typeSelect.querySelector('option[value="break_end"]').style.display = 'block';
+                  typeSelect.value = 'break_end';
+                }
+                break;
+              case 'off_duty':
+              default:
+                if (clockInBtn) clockInBtn.style.display = 'inline-block';
+                if (breakBeginBtn) breakBeginBtn.style.display = 'inline-block';
+                if (typeSelect) {
+                  typeSelect.querySelector('option[value="clock_in"]').style.display = 'block';
+                  typeSelect.querySelector('option[value="break_begin"]').style.display = 'block';
+                  typeSelect.value = 'clock_in';
+                }
+                break;
+            }
+            
+            var statusDiv = document.getElementById('currentStatus');
+            if (statusDiv) {
+              statusDiv.innerHTML = '現在の状態: ' + status.statusText;
+            }
+          })
+          .getCurrentEmployeeStatus(empId);
+      }
+
+      // 勤怠削除（モーダル）
+      function showPasswordBox(){ document.getElementById("pwBox").style.display = "block"; }
+      function hidePasswordBox(){ document.getElementById("pwBox").style.display = "none"; }
+      function confirmDelete(){
+        var pw = document.getElementById("deletePw").value;
+        hidePasswordBox();
+        if (!pw) { updateWRMessage("パスワード未入力です"); return; }
+        updateWRMessage('削除中…');
+        google.script.run
+          .withSuccessHandler(function(msg){
+            updateWRMessage(msg || '削除しました');
+            refreshTimeClocks();
+          })
+          .withFailureHandler(function(err){
+            updateWRMessage('エラー: ' + (err && err.message ? err.message : err));
+          })
+          .deleteLastWorkWithPassword(pw);
+      }
+
+      // 従業員名フィルター
+      function filterEmployees(q){
+        var query = (q || '').trim().toLowerCase();
+        var cards = document.querySelectorAll('.emp-card');
+        var hit = 0;
+        cards.forEach(function(card){
+          var name = (card.getAttribute('data-name') || '').toLowerCase();
+          var show = !query || name.indexOf(query) >= 0;
+          card.style.display = show ? '' : 'none';
+          if (show) hit++;
+        });
+        var counter = document.getElementById('emp_filter_count');
+        if (counter){
+          var total = cards.length;
+          counter.textContent = query ? (hit + ' / ' + total + ' 件表示') : (total + ' 件');
+        }
+      }
+      function clearEmpFilter(){
+        var input = document.getElementById('empFilterInput');
+        if (input){
+          input.value = '';
+          filterEmployees('');
+          input.focus();
+        }
+      }
+
+      // 勤怠一覧再描画
+      function refreshTimeClocks(){
+        google.script.run.withSuccessHandler(renderTimeClocks).getTimeClocks();
+      }
+      function renderTimeClocks(record){
+        var tbody = document.querySelector('tbody');
+        if (!tbody) return;
+        var appUrl = "<?= getAppUrl() ?>";
+        var empId  = "<?= getSelectedEmpId() ?>";
+        
+        window.currentTimeClocks = record || [];
+        
+        if (!record || !record.length) {
+          tbody.innerHTML = '<tr><td colspan="6">データがありません</td></tr>';
+          return;
+        }
+        var html = '';
+        record.forEach(function(r, idx){
+          var url = appUrl + '?empId=' + encodeURIComponent(empId)
+                             + '&student=' + encodeURIComponent(r.student || '');
+          html += '<tr class="wr-row" data-student="' + (r.student || '') + '" data-type="' + (r.type || '') + '" data-date="' + (r.date || '') + '" data-subject="' + (r.subject || '') + '">'
+                +   '<td>' + (r.type || '') + '</td>'
+                +   '<td>' + (r.date || '') + '</td>'
+                +   '<td>' + (r.subject || '') + '</td>'
+                +   '<td class="col-workingtime">' + (r.workingtime || '') + '</td>'
+                +   '<td class="col-student">'
+                +     (r.student ? ('<a href="' + url + '">' + r.student + '</a>') : '')
+                +   '</td>'
+                +   '<td>'
+                +     (r.type === "授業終了"
+                       ? '<input type="text" id="fb_'+idx+'" value="'+(r.feedback||'')+'" '
+                         + 'style="width:120px;" placeholder="フィードバック" data-row="'+r.row+'">'
+                       : (r.feedback || ''))
+                +   '</td>'
+                + '</tr>';
+        });
+        tbody.innerHTML = html;
+        applyTimeRecordFilter();
+      }
+
+      // フィルタ
+      function applyTimeRecordFilter() {
+        var typeQuery = document.getElementById('filter_type').value.trim().toLowerCase();
+        var dateQuery = document.getElementById('filter_date').value.trim().toLowerCase();
+        var subjectQuery = document.getElementById('filter_subject').value.trim().toLowerCase();
+        var studentQuery = document.getElementById('filter_student').value.trim().toLowerCase();
+        
+        var rows = document.querySelectorAll('tbody tr.wr-row');
+        var hit = 0;
+        
+        rows.forEach(function(tr) {
+          var type = (tr.getAttribute('data-type') || '').toLowerCase();
+          var date = (tr.getAttribute('data-date') || '').toLowerCase();
+          var subject = (tr.getAttribute('data-subject') || '').toLowerCase();
+          var student = (tr.getAttribute('data-student') || '').toLowerCase();
+          
+          var show = true;
+          if (typeQuery && type.indexOf(typeQuery) === -1) show = false;
+          if (dateQuery && date.indexOf(dateQuery) === -1) show = false;
+          if (subjectQuery && subject.indexOf(subjectQuery) === -1) show = false;
+          if (studentQuery && student.indexOf(studentQuery) === -1) show = false;
+          
+          tr.style.display = show ? '' : 'none';
+          if (show) hit++;
+        });
+        
+        var counter = document.getElementById('time_filter_count');
+        if (counter) {
+          var total = rows.length;
+          counter.textContent = (typeQuery || dateQuery || subjectQuery || studentQuery) ? 
+            (hit + ' / ' + total + ' 件表示') : (total + ' 件');
+        }
+      }
+      
+      // 保存ボタン
+      function saveTimeRecorderData() {
+  document.getElementById('save_message').textContent = '保存中...';
+
+  var feedbackInputs = document.querySelectorAll('input[id^="fb_"]');
+  var saveCount = 0;
+  var totalCount = feedbackInputs.length;
+
+  if (totalCount === 0) {
+    document.getElementById('save_message').textContent = '保存するフィードバックがありません';
+    return;
+  }
+
+  feedbackInputs.forEach(function(input) {
+    var row = input.getAttribute("data-row");
+    if (row) {
+      google.script.run
+        .withSuccessHandler(function(res){
+          saveCount++;
+          if (saveCount === totalCount) {
+            document.getElementById('save_message').textContent =
+              'フィードバックを保存しました ✓ (' + totalCount + '件)';
+            setTimeout(function() {
+              document.getElementById('save_message').textContent = '';
+            }, 3000);
+          }
+        })
+        .withFailureHandler(function(err){
+          document.getElementById('save_message').textContent =
+            'フィードバック保存エラー: ' + (err && err.message ? err.message : err);
+        })
+        .saveFeedback(row, input.value);
+    }
+  });
+}
+
+    </script>
+  </head>
+
+  <body>
+    <div>
+      <span>名前:</span>
+      <span><?= getEmployeeName() ?></span>
+    </div>
+
+    <div>
+      <h3>今月のタイムレコーダー履歴</h3>
+      
+      <div class="filter-bar" style="margin:12px 0; display:flex; gap:8px; flex-wrap:wrap;">
+        <input id="filter_type" type="text" placeholder="種別で検索" oninput="applyTimeRecordFilter()" 
+               style="padding:4px 6px; border:1px solid #ccc; border-radius:4px;">
+        <input id="filter_date" type="text" placeholder="日時で検索" oninput="applyTimeRecordFilter()" 
+               style="padding:4px 6px; border:1px solid #ccc; border-radius:4px;">
+        <input id="filter_subject" type="text" placeholder="科目で検索" oninput="applyTimeRecordFilter()" 
+               style="padding:4px 6px; border:1px solid #ccc; border-radius:4px;">
+        <input id="filter_student" type="text" placeholder="生徒名で検索" oninput="applyTimeRecordFilter()" 
+               style="padding:4px 6px; border:1px solid #ccc; border-radius:4px;">
+        <span id="time_filter_count" style="font-size:12px; opacity:.75;"></span>
+      </div>
+      
+      <table border="1">
+        <thead>
+          <tr>
+            <th>種別</th><th>日時</th><th>科目</th>
+            <th class="col-workingtime">総労働</th>
+            <th class="col-student">生徒名</th>
+            <th class="col-feedback">フィードバック</th> 
+          </tr>
+        </thead>
+        <tbody>
+         <? var record = getTimeClocks();
+            var appUrl = getAppUrl();
+            var empId  = getSelectedEmpId();
+            for (var i=0;i<record.length;i++){ 
+              var r = record[i];
+              var url = appUrl + '?page=feedback_emp'
+                                 + '&empId=' + encodeURIComponent(empId)
+                                 + '&student=' + encodeURIComponent(r.student || '');
+         ?>
+          <tr class="wr-row" data-student="<?= r.student ?>" data-type="<?= r.type ?>" data-date="<?= r.date ?>" data-subject="<?= r.subject ?>">
+            <td><?= r.type ?></td>
+            <td><?= r.date ?></td>
+            <td><?= r.subject ?></td>
+            <td><?= r.workingtime ?></td>
+            <td>
+              <? if (r.student) { ?>
+                <a href="<?= url ?>"><?= r.student ?></a>
+              <? } ?>
+            </td>
+            <td>
+              <? if (r.type === "授業終了") { ?>
+                <input type="text" id="fb_<?= i ?>" value="<?= r.feedback || '' ?>"
+                       style="width:66%; text-align:center; display:block; margin:0 auto;"
+                       placeholder="未回答" data-row="<?= r.row ?>">
+              <? } else { ?>
+                <?= r.feedback || '' ?>
+              <? } ?>
+            </td>
+          </tr>
+        <? } ?>
+        </tbody>
+      </table>
+      
+      <div class="btn-frame" style="margin-top: 16px; text-align: center;">
+        <button type="button" class="btn" onclick="saveTimeRecorderData()">保存</button>
+        <div id="save_message" style="margin-top: 8px; font-weight: bold;"></div>
+      </div>
+    </div>
+
+    <div>
+      <h3>タイムレコーダー</h3>
+      <div id="currentStatus" style="margin-bottom: 8px; font-weight: bold; color: #2d87ff;"></div>
+      <form id="workRecordForm" onsubmit="return false;">
+        <div>
+          <label class="required-label">対象日時（必須）: </label>
+          <input type="date" name="target_date" required/>
+          <input type="time" name="target_time" required/>
+          <br/>
+          <label class="required-label">打刻種別（必須）</label>
+          <select name="target_type" required>
+            <option value="">選択してください</option>
+            <option value="clock_in">授業開始</option>
+            <option value="break_begin">休憩開始</option>
+            <option value="break_end">休憩終了</option>
+            <option value="clock_out">授業終了</option>
+          </select>
+          <br/>
+          <label class="required-label">科目（必須）</label>
+          <select name="subject" required>
+            <option value="">選択してください</option>
+            <option value="国語">国語</option>
+            <option value="算数">算数</option>
+            <option value="理科">理科</option>
+            <option value="社会">社会</option>
+            <option value="英語">英語</option>
+            <option value="その他">その他</option>
+          </select>
+          <label style="margin-left:12px;" class="required-label">生徒名（必須）</label>
+          <input type="text" name="student" maxlength="4" placeholder="4文字" required/>
+
+          <div class="btn-frame">
+            <button type="button" class="btn" id="registerBtn"
+                    onclick="handleWorkRecordFormSubmit(this.form)">登録</button>
+            <button type="button" onclick="showPasswordBox()" class="btn">勤怠削除</button>
+            <div id="wr_submit_message"></div>
+          </div>
+          
+          <div style="display: none;">
+            <button type="button" id="clockInBtn" class="btn" onclick="document.querySelector('select[name=target_type]').value='clock_in'; handleWorkRecordFormSubmit(document.getElementById('workRecordForm'));">授業開始</button>
+            <button type="button" id="breakBeginBtn" class="btn" onclick="document.querySelector('select[name=target_type]').value='break_begin'; handleWorkRecordFormSubmit(document.getElementById('workRecordForm'));">休憩開始</button>
+            <button type="button" id="breakEndBtn" class="btn" onclick="document.querySelector('select[name=target_type]').value='break_end'; handleWorkRecordFormSubmit(document.getElementById('workRecordForm'));">休憩終了</button>
+            <button type="button" id="clockOutBtn" class="btn" onclick="document.querySelector('select[name=target_type]').value='clock_out'; handleWorkRecordFormSubmit(document.getElementById('workRecordForm'));">授業終了</button>
+          </div>
+        </div>
+      </form>
+      <div class="btn-frame">
+        <a href="<?= getAppUrl() ?>">ホーム画面に戻る</a>
+        <a href="<?= getAppUrl() ?>?page=qr&empId=<?= getSelectedEmpId() ?>" style="margin-left: 10px;">QRコード画面へ</a>
+      </div>
+    </div>
+
+    <div id="pwBox" style="display:none; position:fixed; top:40%; left:50%; transform:translate(-50%,-50%); background:#fff; padding:16px; border:1px solid #ccc; border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,.2);">
+      <p>削除用パスワードを入力してください：</p>
+      <input type="password" id="deletePw" style="width:100%; margin-bottom:8px;">
+      <div style="text-align:right;">
+        <button onclick="confirmDelete()">OK</button>
+        <button onclick="hidePasswordBox()">キャンセル</button>
+      </div>
+    </div>
+  </body>
+</html>

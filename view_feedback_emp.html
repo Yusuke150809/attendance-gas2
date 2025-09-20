@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <?!= HtmlService.createHtmlOutputFromFile('css').getContent(); ?>
+    <style>
+      .fb-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+      .fb-table th, .fb-table td { border: 1px solid #ccc; padding: 6px 8px; }
+      .fb-input { width: 100%; box-sizing: border-box; }
+      .fb-status { font-size: 12px; color: green; }
+      .filter-bar { margin:12px 0; display:flex; gap:8px; flex-wrap:wrap; }
+      .filter-bar input, .filter-bar select {
+        padding:4px 6px; border:1px solid #ccc; border-radius:4px;
+      }
+    </style>
+    <script>
+      
+      window.addEventListener('load', function() {
+        google.script.run.withSuccessHandler(render).getLessonSessions();
+      });
+
+      // 取得→保持→テーブルへ
+      function render(sessions) {
+        window.sessionData   = sessions || [];
+        window.filteredData  = sessions || [];
+        renderTable(window.filteredData);
+      }
+
+      // フィルター処理 
+      function applyFilter(){
+        var startQ = document.getElementById("filter_start").value.trim();
+        var endQ   = document.getElementById("filter_end").value.trim();
+        var empQ   = document.getElementById("filter_emp").value.trim().toLowerCase();
+        var subjQ  = document.getElementById("filter_subj").value.trim().toLowerCase();
+
+        window.filteredData = window.sessionData.filter(function(s){
+          var ok = true;
+          if (startQ && (!s.start || s.start.indexOf(startQ) === -1)) ok = false;
+          if (endQ   && (!s.end   || s.end.indexOf(endQ)   === -1)) ok = false;
+          if (empQ   && (!s.empName || s.empName.toLowerCase().indexOf(empQ) === -1)) ok = false;
+          if (subjQ  && (!s.subject || s.subject.toLowerCase().indexOf(subjQ) === -1)) ok = false;
+          return ok;
+        });
+        renderTable(window.filteredData);
+      }
+
+      function renderTable(sessions){
+        var tbody = document.getElementById('sessions');
+        if (!Array.isArray(sessions) || sessions.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6">記録がありません。</td></tr>';
+          return;
+        }
+
+        var html = '';
+        for (var i = 0; i < sessions.length; i++) {
+          var s = sessions[i].start   || '';
+          var e = sessions[i].end     || '';
+          var emp = sessions[i].empName || '—';
+          var subj = sessions[i].subject || '—';
+          var fb = sessions[i].feedback || '';
+          var answered = sessions[i].answered || '未回答';
+
+          html += '<tr>'
+                +   '<td>' + s + '</td>'
+                +   '<td>' + e + '</td>'
+                +   '<td>' + emp + '</td>'
+                +   '<td>' + subj + '</td>'
+                +   '<td>'
+                +     '<input type="text" class="fb-input" value="'+ fb +'" '
+                +       'oninput="saveFeedback('+i+', this.value)">'
+                +     '<div id="fb_status_'+i+'" class="fb-status"></div>'
+                +   '</td>'
+                +   '<td>' + answered + '</td>'
+                + '</tr>';
+        }
+        tbody.innerHTML = html;
+      }
+
+      //  フィードバック保存
+      function saveFeedback(index, value){
+        var session = window.filteredData[index]; // フィルタ後の行に対応
+        if (!session) return;
+        google.script.run
+          .withSuccessHandler(function(msg){
+            document.getElementById("fb_status_"+index).textContent = "保存しました ✔";
+          })
+          .withFailureHandler(function(err){
+            document.getElementById("fb_status_"+index).textContent = "保存失敗: " + (err && err.message ? err.message : err);
+          })
+          .saveFeedback(session.row, value);
+      }
+    </script>
+  </head>
+
+  <body>
+    <h3>フィードバックページ（従業員用）</h3>
+
+    <div>従業員: <span id="empName"><?= getEmployeeName() ?></span></div>
+    <div>生徒名: <span id="selectedStudent"><?= getSelectedStudent() ?></span></div>
+
+    <!-- 🔍 フィルタバー -->
+    <div class="filter-bar">
+      <input type="text" id="filter_start" placeholder="開始時間で検索" oninput="applyFilter()">
+      <input type="text" id="filter_end"   placeholder="終了時間で検索" oninput="applyFilter()">
+      <input type="text" id="filter_emp"   placeholder="担当従業員で検索" oninput="applyFilter()">
+      <input type="text" id="filter_subj"  placeholder="科目で検索" oninput="applyFilter()">
+    </div>
+
+    <table class="fb-table">
+      <thead>
+        <tr>
+          <th>授業開始時間</th>
+          <th>終了時間</th>
+          <th>担当従業員</th>
+          <th>科目</th>
+          <th>フィードバック</th>
+          <th>回答状況</th>
+        </tr>
+      </thead>
+      <tbody id="sessions">
+        <tr><td colspan="6">読み込み中…</td></tr>
+      </tbody>
+    </table>
+
+    <div class="btn-frame" style="margin-top:16px;">
+      <a href="<?= getAppUrl() ?>?empId=<?= getSelectedEmpId() ?>">タイムレコーダーへ戻る</a>
+      <a href="<?= getAppUrl() ?>">ホームへ戻る</a>
+    </div>
+  </body>
+</html>

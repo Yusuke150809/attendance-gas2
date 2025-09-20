@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <?!= HtmlService.createHtmlOutputFromFile('css').getContent(); ?>
+    
+    <style>
+      body {
+        margin: 0;
+        overflow-x: hidden; /* 横スクロール防止 */
+        font-family: sans-serif;
+        padding: 20px;
+      }
+
+      .wrapper {
+        transform: scale(1.5);
+        transform-origin: top center; /* 中央基準 */
+        width: 100%;
+        display: flex;
+        justify-content: center; /* 中央寄せ */
+      }
+
+      h2 { text-align: center; }
+      .frame { max-width: 400px; margin: 0 auto; }
+      select, button, textarea {
+        width: 100%;
+        padding: 10px;
+        margin: 8px 0;
+        font-size: 16px;
+      }
+      button {
+       padding-top: 15px;   /* ← 元の10pxを1.5倍に */
+       padding-bottom: 15px;
+      }
+      textarea {
+        height: 80px;
+        resize: vertical;
+      }
+      .msg { margin-top: 12px; font-weight: bold; text-align: center; }
+
+      
+    </style>
+    <script>
+      // ページ読み込み時に従業員・科目・生徒一覧を取得
+      function loadData() {
+        var selectedEmpId = "<?= selectedEmpId || '' ?>";
+        
+        // 従業員一覧
+        google.script.run.withSuccessHandler(function(list){
+          var sel = document.getElementById("empSelect");
+          sel.innerHTML = "";
+          list.forEach(function(emp){
+            var opt = document.createElement("option");
+            opt.value = emp.id;
+            opt.textContent = emp.name;
+            sel.appendChild(opt);
+          });
+          
+          // 従業員IDが指定されている場合は自動選択
+          if (selectedEmpId) {
+            sel.value = selectedEmpId;
+            // 選択後にボタン状態を更新
+            updateQRButtonStates();
+          }
+        }).getEmployees();
+
+        // 科目一覧
+        google.script.run.withSuccessHandler(function(subjects){
+          var sel = document.getElementById("subjectSelect");
+          sel.innerHTML = '<option value="">選択してください</option>';
+          subjects.forEach(function(subj){
+            var opt = document.createElement("option");
+            opt.value = subj;
+            opt.textContent = subj;
+            sel.appendChild(opt);
+          });
+        }).getSubjects();
+
+        // 生徒一覧
+        google.script.run.withSuccessHandler(function(students){
+          var sel = document.getElementById("studentSelect");
+          sel.innerHTML = '<option value="">選択してください</option>';
+          students.forEach(function(stu){
+            var opt = document.createElement("option");
+            opt.value = stu;
+            opt.textContent = stu;
+            sel.appendChild(opt);
+          });
+        }).getStudents();
+      }
+
+      // 打刻処理（連打防止付き）
+      var isClocking = false;
+      function clock(type) {
+        if (isClocking) {
+          document.getElementById("msg").textContent = "処理中です。しばらくお待ちください。";
+          return;
+        }
+        
+        var empId   = document.getElementById("empSelect").value;
+        var targetDate = document.getElementById("targetDate").value;
+        var targetTime = document.getElementById("targetTime").value;
+        var subject = document.getElementById("subjectSelect").value;
+        var student = document.getElementById("studentSelect").value;
+        var feedback = "";
+
+        // 必須項目の検証
+        if (!empId)   { alert("従業員を選択してください"); return; }
+        if (!targetDate) { alert("対象日付を入力してください"); return; }
+        if (!targetTime) { alert("対象時刻を入力してください"); return; }
+        if (!subject) { alert("科目を選択してください"); return; }
+        if (!student) { alert("生徒名を選択してください"); return; }
+
+        // 授業終了時のみフィードバックを取得
+        if (type === 'clock_out') {
+          feedback = document.getElementById("feedbackInput").value;
+        }
+
+        isClocking = true;
+        google.script.run.setSelectedEmpId(empId);
+
+        var form = {
+          target_date: targetDate,
+          target_time: targetTime,
+          target_type: type,
+          subject: subject,
+          student: student,
+          feedback: feedback
+        };
+
+        google.script.run.withSuccessHandler(function(msg){
+          document.getElementById("msg").textContent = msg;
+          if (type === 'clock_out') {
+            document.getElementById("feedbackInput").value = ""; // 入力欄リセット
+          }
+          updateQRButtonStates(); // ボタン状態を更新
+          isClocking = false;
+        }).withFailureHandler(function(err) {
+          document.getElementById("msg").textContent = "エラー: " + err;
+          isClocking = false;
+        }).saveWorkRecord(form);
+      }
+
+      // 必須項目チェック関数
+      function checkMandatoryFields() {
+        var empId = document.getElementById("empSelect").value;
+        var targetDate = document.getElementById("targetDate").value;
+        var targetTime = document.getElementById("targetTime").value;
+        var subject = document.getElementById("subjectSelect").value;
+        var student = document.getElementById("studentSelect").value;
+        
+        var isValid = empId && targetDate && targetTime && subject && student;
+        
+        // 全ボタンの状態を更新
+        var buttons = [
+          document.querySelector('button[onclick*="clock_in"]'),
+          document.querySelector('button[onclick*="break_begin"]'),
+          document.querySelector('button[onclick*="break_end"]'),
+          document.querySelector('button[onclick*="clock_out"]')
+        ];
+        
+        buttons.forEach(function(btn) {
+          if (btn) {
+            btn.disabled = !isValid;
+          }
+        });
+        
+        return isValid;
+      }
+
+      // QRページ用ボタン状態制御
+      function updateQRButtonStates() {
+        var empId = document.getElementById("empSelect").value;
+        if (!empId) return;
+        
+        google.script.run
+          .withSuccessHandler(function(status) {
+            var clockInBtn = document.querySelector('button[onclick*="clock_in"]');
+            var breakBeginBtn = document.querySelector('button[onclick*="break_begin"]');
+            var breakEndBtn = document.querySelector('button[onclick*="break_end"]');
+            var clockOutBtn = document.querySelector('button[onclick*="clock_out"]');
+            
+            // 全ボタンを一旦非表示
+            if (clockInBtn) clockInBtn.style.display = 'none';
+            if (breakBeginBtn) breakBeginBtn.style.display = 'none';
+            if (breakEndBtn) breakEndBtn.style.display = 'none';
+            if (clockOutBtn) clockOutBtn.style.display = 'none';
+            
+            // 状態に応じてボタンを表示
+            switch (status.status) {
+              case 'working': // 勤務中
+                if (clockOutBtn) clockOutBtn.style.display = 'block';
+                break;
+              case 'break': // 休憩中
+                if (breakEndBtn) breakEndBtn.style.display = 'block';
+                break;
+              case 'off_duty': // 授業終了
+              default:
+                if (clockInBtn) clockInBtn.style.display = 'block';
+                if (breakBeginBtn) breakBeginBtn.style.display = 'block';
+                break;
+            }
+            
+            // 必須項目チェック後にボタンの有効/無効を設定
+            checkMandatoryFields();
+            
+            // 現在の状態を表示
+            document.getElementById("msg").textContent = "現在の状態: " + status.statusText;
+          })
+          .getCurrentEmployeeStatus(empId);
+      }
+
+      window.onload = function() {
+        loadData();
+        
+        // 現在の日時を設定
+        var now = new Date();
+        document.getElementById("targetDate").value = now.toISOString().slice(0,10);
+        document.getElementById("targetTime").value = ("0"+now.getHours()).slice(-2)+":"+("0"+now.getMinutes()).slice(-2);
+        
+        // 従業員選択時にボタン状態を更新
+        document.getElementById("empSelect").addEventListener('change', function() {
+          if (this.value) {
+            updateQRButtonStates();
+          } else {
+            checkMandatoryFields();
+          }
+        });
+        
+        // 必須項目の変更時にボタン状態を更新
+        document.getElementById("targetDate").addEventListener('change', checkMandatoryFields);
+        document.getElementById("targetTime").addEventListener('change', checkMandatoryFields);
+        document.getElementById("subjectSelect").addEventListener('change', checkMandatoryFields);
+        document.getElementById("studentSelect").addEventListener('change', checkMandatoryFields);
+        
+        // 初期状態でボタンを無効化
+        checkMandatoryFields();
+      };
+    </script>
+  </head>
+  <body>
+    <div class="wrapper">
+      <div class="frame">
+        <h2>QR打刻ページ</h2>
+
+        <label class="required-label">従業員（必須）：</label>
+        <select id="empSelect"></select>
+
+
+
+        <label class="required-label">対象日時（必須）：</label>
+        <div style="display: flex; gap: 8px;">
+          <input type="date" id="targetDate" style="flex: 1;">
+          <input type="time" id="targetTime" style="flex: 1;">
+        </div>
+
+        <label class="required-label">科目（必須）：</label>
+        <select id="subjectSelect">
+          <option value="">選択してください</option>
+        </select>
+
+        <label class="required-label">生徒名（必須）：</label>
+        <select id="studentSelect">
+          <option value="">選択してください</option>
+        </select>
+
+        <button onclick="clock('clock_in')">授業開始</button>
+        <button onclick="clock('break_begin')">休憩開始</button>
+        <button onclick="clock('break_end')">休憩終了</button>
+        <button onclick="clock('clock_out')">授業終了</button>
+
+        <label>フィードバック（授業終了時のみ記録されます）：</label>
+        <textarea id="feedbackInput" placeholder="今日の授業のメモなど"></textarea>
+
+        <div id="msg" class="msg"></div>
+        <div class="btn-frame" style="margin-top:16px; text-align:center;">
+          <a href="<?= getAppUrl() ?>" class="btn">ホーム画面に戻る</a>
+          <? if (selectedEmpId) { ?>
+            <a href="<?= getAppUrl() ?>?empId=<?= selectedEmpId ?>" class="btn" style="margin-left: 10px;">詳細画面へ</a>
+          <? } ?>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

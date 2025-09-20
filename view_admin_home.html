@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <?!= HtmlService.createHtmlOutputFromFile('css').getContent(); ?>
+    <style>
+      /* 背景オーバーレイ */
+      #overlay {
+        display:none;
+        position:fixed; top:0; left:0;
+        width:100%; height:100%;
+        background:rgba(0,0,0,.3);
+        z-index:999;
+      }
+
+      /* パスワード入力モーダル */
+      .pw-box {
+        position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+        background:#fff; padding:24px;
+        border:1px solid #ccc; border-radius:12px;
+        box-shadow:0 6px 18px rgba(0,0,0,.25);
+        width:340px;
+        z-index:1000;
+        text-align:center; /* 中央寄せ */
+      }
+
+      .pw-box h2 {
+        margin:0 0 10px;
+        font-size:20px;
+      }
+
+      .pw-box p {
+        font-size:14px;
+        color:#555;
+        margin:0 0 14px;
+      }
+
+      .pw-box input[type="password"] {
+        width:80%;
+        padding:10px;
+        font-size:16px;
+        margin:0 auto 14px;
+        border:1px solid #ccc;
+        border-radius:6px;
+        display:block;
+        text-align:center; /* 入力文字も中央寄せ */
+      }
+
+      #pwError {
+        color:red;
+        font-size:13px;
+        margin-bottom:10px;
+        text-align:center;
+      }
+
+      .btn-row {
+        display:flex;
+        justify-content:center;
+        gap:12px;
+      }
+
+      .btn-cancel, .btn-ok {
+        flex:1;
+        max-width:120px;
+        text-align:center;
+        padding:10px 0;
+        font-size:15px;
+        border:none;
+        border-radius:6px;
+        cursor:pointer;
+      }
+
+      .btn-cancel {
+        background:#ccc;
+        color:#333;
+        text-decoration:none; /* <a>用 */
+        display:inline-block;
+      }
+      .btn-ok {
+        background:#2d87ff;
+        color:#fff;
+      }
+
+      .btn-cancel:hover { background:#bbb; }
+      .btn-ok:hover { background:#1c5fc9; }
+    </style>
+    <script>
+      // パスワード確認
+      function confirmAdminPw(){
+        var pw = document.getElementById("adminPw").value;
+        document.getElementById("pwError").textContent = "確認中…";
+
+        google.script.run
+          .withSuccessHandler(function(msg){
+            if (msg === "OK") {
+              hidePwBox();
+              document.getElementById("adminContent").style.display = "block";
+            } else {
+              document.getElementById("pwError").textContent = "パスワードが違います";
+            }
+          })
+          .withFailureHandler(function(err){
+            document.getElementById("pwError").textContent = err.message || "エラーが発生しました";
+          })
+          .checkAdminPassword(pw);
+      }
+
+      function hidePwBox(){
+        document.getElementById("pwBox").style.display = "none";
+        document.getElementById("overlay").style.display = "none";
+      }
+
+      function showPwBox(){
+        document.getElementById("pwBox").style.display = "block";
+        document.getElementById("overlay").style.display = "block";
+      }
+
+      document.addEventListener("DOMContentLoaded", function(){
+        var fromParam = "<?= from ?>"; // GASから埋め込み
+        if (fromParam === "home") {
+          showPwBox();
+        } else {
+          document.getElementById("adminContent").style.display = "block";
+        }
+      });
+    </script>
+  </head>
+  <body>
+    <div class="company-title">開発塾 - 塾長ページ</div>
+
+    <!-- 背景オーバーレイ -->
+    <div id="overlay"></div>
+
+    <!-- パスワード入力モーダル -->
+    <div id="pwBox" class="pw-box" style="display:none;">
+      <h2>🔑 管理者ログイン</h2>
+      <p>アクセスするにはパスワードを入力してください</p>
+      
+      <input type="password" id="adminPw" placeholder="パスワードを入力">
+      <div id="pwError"></div>
+
+      <div class="btn-row">
+        <a href="<?= getAppUrl() ?>" class="btn-cancel">キャンセル</a>
+        <button class="btn-ok" onclick="confirmAdminPw()">OK</button>
+      </div>
+    </div>
+
+    <!-- 認証後のコンテンツ -->
+    <div id="adminContent" style="display:none;">
+      <div class="emp-list">
+        <h3>ページ選択</h3>
+        <div class="emp-card-wrap">
+          <a class="emp-card" href="<?= getAppUrl() ?>?page=admin_salary">
+            <span class="emp-id">給与</span>
+            <span class="emp-name">給与計算ページ</span>
+          </a>
+          <a class="emp-card" href="<?= getAppUrl() ?>?page=admin_analysis">
+            <span class="emp-id">分析</span>
+            <span class="emp-name">授業分析ページ</span>
+          </a>
+          <a class="emp-card" href="<?= getAppUrl() ?>?page=admin_attendance">
+            <span class="emp-id">勤務</span>
+            <span class="emp-name">勤務状況ページ</span>
+          </a>
+        </div>
+      </div>
+      <div class="btn-frame" style="margin-top:16px;">
+        <a href="<?= getAppUrl() ?>">ホーム画面に戻る</a>
+      </div>
+    </div>
+  </body>
+</html>

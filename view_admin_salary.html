@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <?!= HtmlService.createHtmlOutputFromFile('css').getContent(); ?>
+
+    <style>
+      .collapsible {
+        background: #f0f0f0;
+        padding: 6px 10px;
+        cursor: pointer;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        margin-top: 16px;
+      }
+      .collapsible-content {
+        display: none;
+        margin-top: 8px;
+      }
+    </style>
+
+    <script>
+      // === 月別集計 ===
+      window.addEventListener('load', function() {
+        populateMonthSelect();
+      });
+
+      function populateMonthSelect(){
+        google.script.run.withSuccessHandler(function(months){
+          var select = document.getElementById("monthSelect");
+          select.innerHTML = "";
+          months.forEach(function(key){
+            var parts = key.split("-");
+            var y = parseInt(parts[0]);
+            var m = parseInt(parts[1]);
+            var opt = document.createElement("option");
+            opt.value = key;
+            opt.textContent = y + "年" + m + "月";
+            select.appendChild(opt);
+          });
+
+          if (months.length > 0){
+            // 最新の月を選択してロード
+            select.value = months[0];
+            var p = months[0].split("-");
+            loadMonthlySalary(parseInt(p[0]), parseInt(p[1]));
+          }
+        }).getAvailableMonths();
+      }
+
+      function loadMonthlySalary(year, month){
+        google.script.run
+          .withSuccessHandler(renderMonthlySalaryTables)
+          .getMonthlySalaryData(year, month);
+
+        document.getElementById("monthlyLabel").textContent =
+          year + "年" + month + "月の給与集計";
+      }
+
+      function renderMonthlySalaryTables(data){
+        var html = "";
+        data.forEach(function(emp, i){
+          html += "<h4>" + emp.employee + "</h4>";
+          html += '<table border="1">' +
+                    '<tr><th>科目</th><th>労働時間</th><th>時給入力</th><th>給料</th></tr>';
+          emp.subjects.forEach(function(row, j){
+            html += '<tr>'
+                  +   '<td>'+row.subject+'</td>'
+                  +   '<td>'+row.hoursStr+'</td>'
+                  +   '<td><input type="number" id="mwage_'+i+'_'+j+'" value="0" oninput="mcalcSalary()"></td>'
+                  +   '<td id="msalary_'+i+'_'+j+'">0</td>'
+                  + '</tr>';
+          });
+          html += '<tr><td colspan="3">合計</td><td id="msalary_total_'+i+'">0</td></tr>';
+          html += '</table>';
+        });
+
+        document.getElementById("monthlySalaryArea").innerHTML = html;
+        window.monthlySalaryData = data;
+      }
+
+      function mcalcSalary(){
+        if (!window.monthlySalaryData) return;
+
+        window.monthlySalaryData.forEach(function(emp, i){
+          var total = 0;
+          emp.subjects.forEach(function(row, j){
+            var wage = parseFloat(document.getElementById("mwage_"+i+"_"+j).value) || 0;
+            var salary = row.hours * wage;
+            document.getElementById("msalary_"+i+"_"+j).textContent = salary.toFixed(0);
+            total += salary;
+          });
+          document.getElementById("msalary_total_"+i).textContent = total.toFixed(0);
+        });
+      }
+    </script>
+  </head>
+
+  <body>
+    <div class="company-title">開発塾 - 給与計算ページ</div>
+
+    <h3 id="monthlyLabel"></h3>
+
+    <div>
+      <select id="monthSelect"
+        onchange="var p=this.value.split('-'); loadMonthlySalary(parseInt(p[0]),parseInt(p[1]))">
+      </select>
+    </div>
+
+    <div id="monthlySalaryArea" style="margin-top:12px;"></div>
+
+    <!-- 年度別集計ページへのリンク -->
+    <div class="btn-frame" style="margin-top:16px;">
+      <a href="<?= getAppUrl() ?>?page=yearly">年度別集計ページへ</a>
+    </div>
+
+    <div class="btn-frame" style="margin-top:8px;">
+      <a href="<?= getAppUrl() ?>?page=admin">塾長メニューに戻る</a>
+      <a href="<?= getAppUrl() ?>">ホーム画面に戻る</a>
+    </div>
+  </body>
+</html>

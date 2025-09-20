@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <?!= HtmlService.createHtmlOutputFromFile('css').getContent(); ?>
+
+    <style>
+      .fb-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+      .fb-table th, .fb-table td { border: 1px solid #ccc; padding: 6px 8px; }
+      .fb-input { width: 100%; box-sizing: border-box; }
+      .fb-status { font-size: 12px; color: green; }
+      .filter-bar { margin:12px 0; display:flex; gap:8px; flex-wrap:wrap; }
+      .filter-bar input, .filter-bar select {
+        padding:4px 6px; border:1px solid #ccc; border-radius:4px;
+      }
+    </style>
+
+    <script>
+      // === あなたのフォームURL & entryID をここで定義 ===
+      const FORM_BASE_URL = "https://docs.google.com/forms/d/e/1FAIpQLSepBpLZDgVddmBYntZVlmwvcvtsUQfaPduu_NC7g5FSG_7uoQ/viewform";
+      const ENTRY_IDS = {
+        start:   "entry.1224691360", // 開始時間
+        end:     "entry.1953807348", // 終了時間
+        emp:     "entry.1309563129", // 担当従業員
+        subject: "entry.215060474",  // 科目
+        student: "entry.809958982"
+      };
+
+      // ==== ページ初期化 ====
+      window.addEventListener('load', function() {
+        google.script.run.withSuccessHandler(render).getLessonSessions();
+      });
+
+      // 取得→保持→テーブル描画
+      function render(sessions) {
+        window.sessionData   = sessions || [];
+        window.filteredData  = sessions || [];
+        renderTable(window.filteredData);
+      }
+
+      // ==== フィルター処理 ====
+      function applyFilter(){
+        var startQ = document.getElementById("filter_start").value.trim();
+        var endQ   = document.getElementById("filter_end").value.trim();
+        var empQ   = document.getElementById("filter_emp").value.trim().toLowerCase();
+        var subjQ  = document.getElementById("filter_subj").value.trim().toLowerCase();
+
+        window.filteredData = window.sessionData.filter(function(s){
+          var ok = true;
+          if (startQ && (!s.start || s.start.indexOf(startQ) === -1)) ok = false;
+          if (endQ   && (!s.end   || s.end.indexOf(endQ)   === -1)) ok = false;
+          if (empQ   && (!s.empName || s.empName.toLowerCase().indexOf(empQ) === -1)) ok = false;
+          if (subjQ  && (!s.subject || s.subject.toLowerCase().indexOf(subjQ) === -1)) ok = false;
+          return ok;
+        });
+        renderTable(window.filteredData);
+      }
+
+     function renderTable(sessions){
+  var tbody = document.getElementById('sessions');
+  if (!Array.isArray(sessions) || sessions.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7">記録がありません。</td></tr>';
+    return;
+  }
+
+  var formBaseUrl = "https://docs.google.com/forms/d/e/1FAIpQLSepBpLZDgVddmBYntZVlmwvcvtsUQfaPduu_NC7g5FSG_7uoQ/viewform";
+
+  var html = '';
+  for (var i = 0; i < sessions.length; i++) {
+    var s = sessions[i].start || '';
+    var e = sessions[i].end   || '';
+    var emp = sessions[i].empName || '—';
+    var subj = sessions[i].subject || '—'; 
+    var fb = sessions[i].feedback || '';
+    var answered = sessions[i].answered || '未回答'; // ✅ 追加
+
+    var formUrl = formBaseUrl
+      + "?entry.1224691360=" + encodeURIComponent(s)
+      + "&entry.1953807348=" + encodeURIComponent(e)
+      + "&entry.1309563129=" + encodeURIComponent(emp)
+      + "&entry.215060474="  + encodeURIComponent(subj)
+      + "&entry.809958982="  + encodeURIComponent(sessions[i].student || ""); // 生徒名
+
+    html += '<tr>'
+          +   '<td>' + s + '</td>'
+          +   '<td>' + e + '</td>'
+          +   '<td>' + emp + '</td>'
+          +   '<td>' + subj + '</td>'
+          +   '<td>'
+          +     '<input type="text" class="fb-input" value="'+ fb +'" '
+          +       'data-row="' + sessions[i].row + '">'
+          +     '<div id="fb_status_'+i+'" class="fb-status"></div>'
+          +   '</td>'
+          +   '<td><a href="' + formUrl + '" target="_blank">アンケート</a></td>'
+          +   '<td>' + answered + '</td>' <!-- ✅ 表示 -->
+          + '</tr>';
+  }
+  tbody.innerHTML = html;
+}
+
+      // ==== フィードバック保存（即時） ====
+      function saveFeedback(index, value){
+        var session = window.filteredData[index]; // フィルタ後の行に対応
+        if (!session) return;
+        google.script.run
+          .withSuccessHandler(function(msg){
+            document.getElementById("fb_status_"+index).textContent = "保存しました ✔";
+          })
+          .withFailureHandler(function(err){
+            document.getElementById("fb_status_"+index).textContent = "保存失敗: " + (err && err.message ? err.message : err);
+          })
+          .saveFeedback(session.row, value);
+      }
+      
+      // ==== 全フィードバック保存 ====
+      function saveAllFeedback(){
+        document.getElementById("feedback_save_message").textContent = "フィードバック保存中...";
+        
+        var inputs = document.querySelectorAll('.fb-input');
+        var saveCount = 0;
+        var totalCount = inputs.length;
+        
+        if (totalCount === 0) {
+          document.getElementById("feedback_save_message").textContent = "保存するデータがありません";
+          return;
+        }
+        
+        inputs.forEach(function(input) {
+          var row = input.getAttribute('data-row');
+          if (row) {
+            google.script.run
+              .withSuccessHandler(function(msg){
+                saveCount++;
+                if (saveCount === totalCount) {
+                  document.getElementById("feedback_save_message").textContent = "フィードバック列を保存しました ✓ (" + totalCount + "件)";
+                  setTimeout(function() {
+                    document.getElementById("feedback_save_message").textContent = "";
+                  }, 3000);
+                }
+              })
+              .withFailureHandler(function(err){
+                document.getElementById("feedback_save_message").textContent = "保存エラー: " + (err && err.message ? err.message : err);
+              })
+              .saveFeedback(parseInt(row), input.value);
+          } else {
+            // データ行が見つからない場合はカウントを増やして次へ
+            saveCount++;
+            if (saveCount === totalCount) {
+              document.getElementById("feedback_save_message").textContent = "フィードバック列を保存しました ✓ (" + totalCount + "件)";
+              setTimeout(function() {
+                document.getElementById("feedback_save_message").textContent = "";
+              }, 3000);
+            }
+          }
+        });
+      }
+    </script>
+  </head>
+
+  <body>
+    <h3>フィードバックページ</h3>
+
+    <div>従業員: <span id="empName"><?= getEmployeeName() ?></span></div>
+    <div>生徒名: <span id="selectedStudent"><?= getSelectedStudent() ?></span></div>
+
+    <!-- 🔍 フィルタバー -->
+    <div class="filter-bar">
+      <input type="text" id="filter_start" placeholder="開始時間で検索" oninput="applyFilter()">
+      <input type="text" id="filter_end"   placeholder="終了時間で検索" oninput="applyFilter()">
+      <input type="text" id="filter_emp"   placeholder="担当従業員で検索" oninput="applyFilter()">
+      <input type="text" id="filter_subj"  placeholder="科目で検索" oninput="applyFilter()">
+    </div>
+
+    <table class="fb-table">
+      <thead>
+        <tr>
+          <th>授業開始時間</th>
+          <th>終了時間</th>
+          <th>担当従業員</th>
+          <th>科目</th>
+          <th>フィードバック</th>
+          <th>アンケート</th>
+          <th>回答状況</th>
+        </tr>
+      </thead>
+      <tbody id="sessions">
+        <tr><td colspan="6">読み込み中…</td></tr>
+      </tbody>
+    </table>
+
+    <!-- 保存ボタン -->
+    <div class="btn-frame" style="margin-top: 16px; text-align: center;">
+      <button type="button" class="btn" onclick="saveAllFeedback()">フィードバック保存</button>
+      <div id="feedback_save_message" style="margin-top: 8px; font-weight: bold;"></div>
+    </div>
+
+    <div class="btn-frame" style="margin-top:16px;">
+      <a href="<?= getAppUrl() ?>">ホームへ戻る</a>
+    </div>
+  </body>
+</html>

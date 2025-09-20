@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <?!= HtmlService.createHtmlOutputFromFile('css').getContent(); ?>
+    <script>
+      function loadAttendanceData() {
+        google.script.run
+          .withSuccessHandler(renderAttendanceCards)
+          .withFailureHandler(function(error) {
+            console.error('Error loading attendance data:', error);
+            document.getElementById('attendance-container').innerHTML = 
+              '<p style="color: red;">データの読み込みに失敗しました。</p>';
+          })
+          .getAllEmployeesAttendanceStatus();
+      }
+      
+      function renderAttendanceCards(employeesData) {
+        var container = document.getElementById('attendance-container');
+        
+        if (!employeesData || employeesData.length === 0) {
+          container.innerHTML = '<p>従業員データがありません。</p>';
+          return;
+        }
+        
+        var html = '<div class="attendance-cards">';
+        
+        employeesData.forEach(function(emp) {
+          var statusClass = 'status-' + emp.status;
+          var lastActionText = emp.lastAction && emp.lastTime ? 
+            '最終動作: ' + emp.lastAction + ' (' + emp.lastTime + ')' : 
+            '打刻記録なし';
+          
+          // Safely escape HTML content
+          var empName = String(emp.name || '').replace(/[<>&"]/g, function(m) {
+            return {'<':'&lt;', '>':'&gt;', '&':'&amp;', '"':'&quot;'}[m];
+          });
+          var empId = String(emp.id || '').replace(/[<>&"]/g, function(m) {
+            return {'<':'&lt;', '>':'&gt;', '&':'&amp;', '"':'&quot;'}[m];
+          });
+          var statusText = String(emp.statusText || '🔴 授業終了');
+            
+          html += '<div class="attendance-card">' +
+                    '<div class="status-badge ' + statusClass + '">' + statusText + '</div>' +
+                    '<div class="employee-info">' +
+                      '<div class="employee-name">' + empName + '</div>' +
+                      '<div class="employee-id">ID: ' + empId + '</div>' +
+                      '<div class="last-action">' + lastActionText + '</div>' +
+                    '</div>' +
+                  '</div>';
+        });
+        
+        html += '</div>';
+        container.innerHTML = html;
+      }
+      
+      window.addEventListener('load', loadAttendanceData);
+    </script>
+  </head>
+  <body>
+    <div class="company-title">開発塾 - 勤務状況ページ</div>
+    <p>講師の勤務状況をリアルタイムで確認できます。</p>
+    
+    <div id="attendance-container">
+      <p>データを読み込み中...</p>
+    </div>
+
+    <div class="btn-frame" style="margin-top:16px;">
+      <button onclick="loadAttendanceData()" class="btn">更新</button>
+      <a href="<?= getAppUrl() ?>?page=admin">塾長メニューに戻る</a>
+      <a href="<?= getAppUrl() ?>">ホーム画面に戻る</a>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <?!= HtmlService.createHtmlOutputFromFile('css').getContent(); ?>
+    <script>
+      // 年リスト　ロード
+      function loadYears(){
+        google.script.run.withSuccessHandler(function(years){
+          var sel = document.getElementById("yearSelect");
+          sel.innerHTML = "";
+          years.forEach(function(y){
+            sel.innerHTML += '<option value="'+y+'">'+y+'年</option>';
+          });
+          if (years.length > 0){
+            loadYearlySalary(parseInt(years[0])); // 最新の年をロード
+          }
+        }).getAvailableYears();
+      }
+
+      // 選択した年のデータを取得
+      function loadYearlySalary(year){
+        google.script.run.withSuccessHandler(renderYearlySalaryTables).getYearlySalaryData(year);
+        document.getElementById("yearlyLabel").textContent = year + "年の給与集計";
+      }
+
+      function renderYearlySalaryTables(data){
+        var html = "";
+        data.forEach(function(emp, i){
+          html += "<h4>" + emp.employee + "</h4>";
+          html += '<table border="1"><tr><th>科目</th><th>労働時間</th><th>時給入力</th><th>給料</th></tr>';
+          emp.subjects.forEach(function(row, j){
+            html += '<tr>'
+                  + '<td>'+row.subject+'</td>'
+                  + '<td>'+row.hoursStr+'</td>'
+                  + '<td><input type="number" id="ywage_'+i+'_'+j+'" value="0" oninput="ycalcSalary()"></td>'
+                  + '<td id="ysalary_'+i+'_'+j+'">0</td>'
+                  + '</tr>';
+          });
+          html += '<tr><td colspan="3">合計</td><td id="ysalary_total_'+i+'">0</td></tr>';
+          html += '</table>';
+        });
+        document.getElementById("yearlySalaryArea").innerHTML = html;
+        window.yearlySalaryData = data;
+      }
+
+      function ycalcSalary(){
+        if (!window.yearlySalaryData) return;
+        window.yearlySalaryData.forEach(function(emp, i){
+          var total = 0;
+          emp.subjects.forEach(function(row, j){
+            var wage = parseFloat(document.getElementById("ywage_"+i+"_"+j).value) || 0;
+            var salary = row.hours * wage;
+            document.getElementById("ysalary_"+i+"_"+j).textContent = salary.toFixed(0);
+            total += salary;
+          });
+          document.getElementById("ysalary_total_"+i).textContent = total.toFixed(0);
+        });
+      }
+
+      window.addEventListener("load", loadYears);
+    </script>
+  </head>
+  <body>
+    <div class="company-title">開発塾 - 年別集計ページ</div> 
+
+    <h3 id="yearlyLabel"></h3>
+    <div>
+      <select id="yearSelect" onchange="loadYearlySalary(parseInt(this.value))"></select>
+    </div>
+
+    <div id="yearlySalaryArea" style="margin-top:12px;"></div>
+
+    <div class="btn-frame" style="margin-top:16px;">
+      <a href="<?= getAppUrl() ?>?page=admin">塾長ページに戻る</a>
+    </div>
+  </body>
+</html>
