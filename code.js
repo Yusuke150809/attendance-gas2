@@ -927,19 +927,25 @@ function getAllEmployeesAttendanceStatus() {
 }
 
 function getLessonSessions() {
-  var empId   = getSelectedEmpId();
   var student = getSelectedStudent();
-  if (!empId || !student) return [];
+  if (!student) return [];
 
   var sh = SpreadsheetApp.getActiveSpreadsheet().getSheets()[3]; // 打刻履歴
   var last = sh.getLastRow();
   if (last < 2) return [];
 
   var vals = sh.getRange(2, 1, last - 1, 7).getValues(); // A〜G列
-  var rows = vals.filter(function(r){
-    return String(r[0]) === String(empId) && String(r[5]) === String(student);
-  }).sort(function(a,b){
-    return new Date(a[2]) - new Date(b[2]);
+  var rows = [];
+  for (var j = 0; j < vals.length; j++) {
+    if (String(vals[j][5]) === String(student)) {
+      rows.push({
+        data: vals[j],
+        originalRow: j + 2  // Track original row number
+      });
+    }
+  }
+  rows.sort(function(a,b){
+    return new Date(a.data[2]) - new Date(b.data[2]);
   });
 
   // フォーム回答マップを取得
@@ -949,11 +955,13 @@ function getLessonSessions() {
   var currentStart = null;
   var currentSubject = "";
   for (var i = 0; i < rows.length; i++) {
-    var type = rows[i][1];
-    var dt   = new Date(rows[i][2]);
-    var subj = rows[i][3] || "—";
-    var fb   = rows[i][6] || "";
-    var stu  = rows[i][5] || "";
+    var rowData = rows[i].data;
+    var originalRowNum = rows[i].originalRow;
+    var type = rowData[1];
+    var dt   = new Date(rowData[2]);
+    var subj = rowData[3] || "—";
+    var fb   = rowData[6] || "";
+    var stu  = rowData[5] || "";
 
     if (type === '授業開始') {
       currentStart = dt;
@@ -971,12 +979,12 @@ function getLessonSessions() {
       sessions.push({
         start: startStr,
         end: endStr,
-        empName: getEmployeeNameById(empId),
+        empName: getEmployeeNameById(rowData[0]), // Get employee name from each row's data
         subject: currentSubject,
         feedback: fb,
         student: stu,
         answered: answered,  
-        row: i+2
+        row: originalRowNum
       });
       currentStart = null;
       currentSubject = "";
